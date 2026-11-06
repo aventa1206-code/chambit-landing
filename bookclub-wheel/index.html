@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>북클럽 라이브러리</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,500&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#ffffff;--ink:#1d1c1a;--muted:#8b877e;--line:#e3dfd6}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+
+/* ---------- 헤더: 학년 / 레벨 ---------- */
+header{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 16px 0}
+.logo{display:block;height:30px;width:auto;filter:grayscale(1) contrast(1.15);opacity:.9}
+.row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.row button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;font:500 13px "Noto Sans KR";color:var(--muted);cursor:pointer;transition:.2s}
+.row button:hover{color:var(--ink)}
+.row button.on{background:var(--g);color:#fff;border-color:var(--g)}
+#subs button{padding:4px 12px;font-size:12px}
+
+/* ---------- 원형 카드 휠 ---------- */
+#stage{position:fixed;inset:0;cursor:grab;touch-action:none}
+#stage.drag{cursor:grabbing}
+#wheel{position:absolute;left:50%;width:0;height:0}
+.card{position:absolute;width:var(--cw);height:calc(var(--cw)*1.32);left:calc(var(--cw)/-2);top:calc(var(--cw)*-0.66)}
+.card .face{position:absolute;inset:0;border-radius:3px;overflow:hidden;background:#ddd;cursor:pointer;
+  box-shadow:0 10px 24px rgba(0,0,0,.18);transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s}
+.card .face img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.card.focus .face{transform:translateY(-12px)}
+@media (hover:hover){  /* 터치 기기에서는 hover가 눌린 채 남지 않도록 */
+  .card:hover .face{transform:translateY(-22px) scale(1.05);box-shadow:0 22px 40px rgba(30,25,15,.28)}
+  .card.focus:hover .face{transform:translateY(-26px) scale(1.05)}
+}
+.card .tag{position:absolute;bottom:calc(100% + 30px);left:50%;transform:rotate(-90deg);transform-origin:0 0;
+  white-space:nowrap;font-size:12px;line-height:1.35;color:var(--muted);pointer-events:none}
+.card .tag b{display:block;color:#55524b;font-weight:700;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.card .step{position:absolute;left:8px;bottom:8px;background:var(--g);color:#fff;font-size:10px;padding:2px 7px;border-radius:999px;pointer-events:none}
+
+.hint{position:fixed;bottom:20px;left:0;right:0;text-align:center;font-size:12px;color:var(--muted);z-index:5;pointer-events:none}
+.hint b{color:var(--ink);font-weight:500}
+
+/* ---------- 정보 패널 (가운데 카드) ---------- */
+#info{position:fixed;left:50%;bottom:calc(var(--cw)*0.15 + 20px);transform:translateX(-50%);text-align:center;z-index:4;pointer-events:none;width:min(560px,90vw)}
+#info h2{font-size:18px;font-weight:700}
+#info p{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* ---------- 책 소개 (표지 클릭) ---------- */
+#viewer{position:fixed;inset:0;z-index:50;pointer-events:none;background:rgba(255,255,255,0);transition:background .45s;
+  -webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}
+#viewer.open{pointer-events:auto;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.flyer{position:absolute;opacity:0;border-radius:4px;object-fit:cover;box-shadow:0 24px 60px rgba(0,0,0,.28);
+  transition:all .6s cubic-bezier(.5,0,.15,1)}
+.detail{position:absolute;overflow:auto;opacity:0;transform:translateY(12px);transition:opacity .35s, transform .35s}
+#viewer.ready .detail{opacity:1;transform:none}
+.detail .chip{display:inline-block;background:var(--g);color:#fff;font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px}
+.detail h3{font-size:28px;line-height:1.25;margin-top:14px}
+.detail .by{font-size:14px;color:#55524b;margin-top:8px}
+.detail .meta{font-size:12px;color:var(--muted);margin-top:6px}
+.detail .desc{font-size:14px;line-height:1.7;color:#3a3833;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);
+  background:#fff;color:var(--ink);font-size:18px;cursor:pointer;opacity:0;transition:.3s;z-index:2}
+#viewer.ready .close{opacity:1}
+
+/* 폰 가로·낮은 창 */
+body.compact header{padding-top:calc(8px + env(safe-area-inset-top));gap:6px}
+body.compact .logo{height:20px}
+body.compact .row button{padding:4px 11px;font-size:12px}
+body.compact .card .tag{display:none}
+body.compact #info h2{font-size:15px}
+body.compact #info p{margin-top:2px}
+
+@media (max-width:640px){
+  header{padding:calc(12px + env(safe-area-inset-top)) 0 0;gap:8px}
+  .logo{height:24px}
+  /* 탭은 한 줄 가로 스크롤 (넘치지 않으면 가운데) */
+  .row{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:100%;padding:0 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .row::-webkit-scrollbar{display:none}
+  .row>:first-child{margin-left:auto} .row>:last-child{margin-right:auto}
+  .row button{flex:none;padding:6px 12px;font-size:12px}
+  .card .tag{display:none}
+  .card .step{left:6px;bottom:6px;font-size:9px}
+  #info{bottom:calc(16px + env(safe-area-inset-bottom))}
+  #info h2{font-size:16px}
+  /* 책 소개: 표지 위, 소개 아래 */
+  .detail{text-align:center}
+  .detail h3{font-size:22px;margin-top:10px}
+  .detail .desc{text-align:left;margin-top:14px;padding-top:14px}
+  .close{top:calc(8px + env(safe-area-inset-top));right:10px;width:38px;height:38px}
+}
+body.compact .detail h3{font-size:22px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="https://new.bookclubs.co.kr/brandnew/images/common/logo.png" alt="BOOKCLUBS">
+  <nav class="row" id="grades"></nav>
+  <nav class="row" id="subs"></nav>
+</header>
+
+<div id="stage"><div id="wheel"></div></div>
+<div id="info"><h2 id="infoTitle"></h2><p id="infoMeta"></p></div>
+
+<div id="viewer">
+  <button class="close" id="closeBtn" aria-label="닫기">✕</button>
+  <img class="flyer" id="flyer" alt="">
+  <div class="detail" id="detail">
+    <span class="chip" id="dLevel"></span>
+    <h3 id="dTitle"></h3>
+    <p class="by" id="dBy"></p>
+    <p class="meta" id="dMeta"></p>
+    <p class="desc" id="dDesc"></p>
+  </div>
+</div>
+
+<!-- 실서비스 공개 도서 데이터 (BC_LIB) -->
+<script src="teacher-library-books.js"></script>
+<script>
+/* BC_LIB: [book_seq, 제목, 레벨, Step, 정독, 표지(0=기본 경로|주소), 작가, 장르, 주제, 쪽수, 소개, 출판사] */
+const CDN = "https://cdn.bookclubs.co.kr";
+const coverUrl = b => b[5] && b[5] !== 0 ? b[5] : `${CDN}/book_cover/e_ebook/default/${b[0]}.jpg`;
+// 보안: 책 본문(뷰어) 링크는 연결하지 않음. 표지 클릭 시 책 소개만 보여줌.
+
+// 레벨 컬러: cdn.bookclubs.co.kr/chambit_main/roadmap_k.webp 기준
+const GRADES = [
+  {id:"K",  name:"Kinder",  color:"#ed6113"},
+  {id:"G1", name:"Grade 1", color:"#f99120"},
+  {id:"G2", name:"Grade 2", color:"#fec267"},
+  {id:"G3", name:"Grade 3", color:"#3ebcbb"},
+  {id:"G4", name:"Grade 4", color:"#11b1c8"},
+  {id:"G5", name:"Grade 5", color:"#0f5999"},
+  {id:"G6", name:"Grade 6", color:"#2d3653"},
+];
+const BOOKS_ALL = (window.BC_LIB || []).slice();
+
+const $ = id => document.getElementById(id);
+const wheel = $("wheel"), stage = $("stage");
+let grade = "G1", sub = "A", books = [], cards = [];
+let STEP = 8, R = 900, rot = 0, target = 0, vel = 0;
+
+/* ---------- 학년 / 레벨 탭 ---------- */
+function gColor(){ return GRADES.find(g => g.id === grade).color; }
+function buildTabs(){
+  document.documentElement.style.setProperty("--g", gColor());
+  $("grades").innerHTML = GRADES.map(g => `<button data-g="${g.id}" class="${g.id===grade?"on":""}">${g.name}</button>`).join("");
+  $("subs").innerHTML = ["A","B","C","D"].map(s =>
+    `<button data-s="${s}" class="${s===sub?"on":""}">${grade}-${s}</button>`).join("");
+}
+$("grades").onclick = e => { const b = e.target.closest("button"); if(!b) return; grade = b.dataset.g; sub = "A"; buildTabs(); build(); };
+$("subs").onclick = e => { const b = e.target.closest("button"); if(!b) return; sub = b.dataset.s; buildTabs(); build(); };
+
+/* ---------- 휠 ---------- */
+function layout(){
+  const w = innerWidth, h = innerHeight;
+  const mobile = w < 640;
+  const compact = !mobile && h < 620;           // 폰 가로·낮은 창: 세로 제목 숨기고 헤더 압축
+  document.body.classList.toggle("compact", compact);
+  // 모바일: 카드를 크게, 원을 완만하게 → 한 화면에 3~4권
+  const cw = mobile  ? Math.max(110, Math.min(180, w*0.42, h*0.24))
+           : compact ? Math.max(80, Math.min(150, w*0.13, h*0.27))
+                     : Math.max(100, Math.min(190, w*0.13, h*0.2));
+  document.documentElement.style.setProperty("--cw", cw+"px");
+  R = mobile ? Math.max(w*1.5, 520) : Math.max(w*0.8, 560);
+  STEP = (cw*1.02)/R * 180/Math.PI;
+  // 가운데 카드의 세로 위치: 헤더 아래 남은 공간 기준
+  const headH = document.querySelector("header").getBoundingClientRect().bottom;
+  const cy = mobile ? h*0.48 : compact ? headH + cw*0.66 + 34 : h*0.6;
+  wheel.style.top = (cy + R) + "px";
+  // 모바일·가로: 책 제목을 가운데 카드 바로 아래에
+  const near = mobile || compact;
+  $("info").style.top = near ? (cy + cw*0.66 + (compact ? 24 : 36)) + "px" : "";
+  $("info").style.bottom = near ? "auto" : "";
+}
+function build(){
+  books = BOOKS_ALL.filter(b => b[2] === `${grade}-${sub}`).sort((a,b) => a[3]-b[3] || a[0]-b[0]);
+  wheel.innerHTML = "";
+  cards = books.map((b,i) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `<div class="tag"><b>${b[1]}</b>${b[2]} · Step ${b[3]}</div>
+      <div class="face"><img loading="lazy" src="${coverUrl(b)}" alt="${b[1].replace(/"/g,"&quot;")}"><span class="step">Step ${b[3]}</span></div>`;
+    el.querySelector(".face").addEventListener("click", () => { if(!moved) openBook(i); });
+    wheel.appendChild(el);
+    return el;
+  });
+  layout();
+  // 화면이 카드로 가득 차도록 앞쪽 몇 권 뒤에서 시작 + 살짝 돌아 들어오는 연출
+  const start = -Math.min(Math.floor(books.length/2), 6) * STEP;
+  rot = start + 25; target = start; vel = 0;
+}
+function render(){
+  if(!dragging){
+    target += vel; vel *= 0.92;
+    const min = -(books.length-1)*STEP;
+    if(target < min) target += (min-target)*0.15;
+    if(target > 0) target += (0-target)*0.15;
+  }
+  rot += (target-rot)*0.12;
+  let fi = -1;
+  cards.forEach((c,i) => {
+    const a = i*STEP + rot;
+    if(Math.abs(a) > 75){ c.style.display = "none"; return; }
+    c.style.display = "";
+    c.style.transform = `rotate(${a}deg) translateY(${-R}px)`;
+    c.style.zIndex = 1000 - Math.round(Math.abs(a)*10);
+    const f = Math.abs(a) < STEP/2;
+    c.classList.toggle("focus", f);
+    if(f) fi = i;
+  });
+  showInfo(fi);
+  requestAnimationFrame(render);
+}
+let lastInfo = -2;
+function showInfo(i){
+  if(i === lastInfo) return; lastInfo = i;
+  const b = books[i];
+  $("infoTitle").textContent = b ? b[1] : "";
+  $("infoMeta").textContent = b ? [b[6], b[8], b[9] ? b[9]+"쪽" : ""].filter(Boolean).join(" · ") : "";
+}
+
+/* ---------- 입력 ---------- */
+let dragging=false, moved=false, sx=0, st=0, lx=0, lt=0;
+stage.addEventListener("pointerdown", e => { dragging=true; moved=false; sx=lx=e.clientX; st=target; lt=performance.now(); vel=0; });
+addEventListener("pointermove", e => {
+  if(!dragging) return;
+  const dx = e.clientX - sx;
+  if(Math.abs(dx) > 5){ moved = true; stage.classList.add("drag"); }
+  const k = 180/Math.PI/R;
+  target = st + dx*k;
+  const now = performance.now();
+  vel = (e.clientX-lx)*k*16/Math.max(1, now-lt);
+  lx = e.clientX; lt = now;
+});
+addEventListener("pointerup", () => { dragging=false; stage.classList.remove("drag"); setTimeout(()=>moved=false,0); });
+stage.addEventListener("wheel", e => { e.preventDefault(); target -= (e.deltaY+e.deltaX)*0.03; }, {passive:false});
+addEventListener("keydown", e => {
+  if(viewerOpen){ if(e.key==="Escape") closeBook(); return; }
+  if(e.key==="ArrowRight") target = Math.round(target/STEP-1)*STEP;
+  if(e.key==="ArrowLeft")  target = Math.round(target/STEP+1)*STEP;
+  if(e.key==="Enter"){ const i = Math.round(-target/STEP); if(books[i]) openBook(i); }
+});
+addEventListener("resize", layout);
+
+/* ---------- 표지 클릭: 표지가 날아와 커지고 책 소개가 나옴 (본문 링크 없음) ---------- */
+const viewer = $("viewer"), flyer = $("flyer"), detail = $("detail");
+let viewerOpen = false, openIdx = -1, fromRect = null;
+const place = (el, r) => Object.assign(el.style, {left:r.left+"px", top:r.top+"px", width:r.width+"px", height:r.height+"px"});
+
+// 커진 표지 위치: PC/가로는 왼쪽(소개는 오른쪽), 세로 폰은 위(소개는 아래)
+function coverRect(ratio){
+  const w = innerWidth, h = innerHeight, stack = w < 640;
+  if(stack){
+    const ch = Math.min(h*0.42, (w*0.62)/ratio), cw = ch*ratio;
+    return {left:(w-cw)/2, top:Math.max(56, h*0.08), width:cw, height:ch};
+  }
+  const ch = Math.min(h*0.72, 460), cw = ch*ratio, gap = 40, dw = Math.min(380, w*0.4);
+  const left = (w - (cw + gap + dw))/2;
+  return {left, top:(h-ch)/2, width:cw, height:ch};
+}
+function placeDetail(cr){
+  if(innerWidth < 640){
+    Object.assign(detail.style, {left:"20px", right:"20px", top:(cr.top+cr.height+24)+"px", width:"auto", maxHeight:(innerHeight-(cr.top+cr.height+24)-20)+"px"});
+  } else {
+    const dw = Math.min(380, innerWidth*0.4);
+    Object.assign(detail.style, {left:(cr.left+cr.width+40)+"px", right:"auto", top:cr.top+"px", width:dw+"px", maxHeight:cr.height+"px"});
+  }
+}
+addEventListener("resize", () => {
+  if(!viewerOpen) return;
+  const cr = coverRect(fromRect.width/fromRect.height);
+  place(flyer, cr); placeDetail(cr);
+});
+
+function openBook(i){
+  const b = books[i], card = cards[i];
+  openIdx = i; viewerOpen = true;
+  fromRect = card.querySelector(".face").getBoundingClientRect();
+  flyer.src = coverUrl(b);
+  $("dLevel").textContent = `${b[2]} · Step ${b[3]}`;
+  $("dTitle").textContent = b[1];
+  $("dBy").textContent = b[6] || "";
+  $("dMeta").textContent = [b[7], b[8], b[9] ? b[9]+"쪽" : "", b[11]].filter(Boolean).join(" · ");
+  $("dDesc").textContent = b[10] || "";
+
+  const cr = coverRect(fromRect.width/fromRect.height);
+  flyer.style.transition = "none"; place(flyer, fromRect); flyer.style.opacity = 1;
+  placeDetail(cr);
+  card.style.visibility = "hidden";
+  viewer.classList.add("open");
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    flyer.style.transition = ""; place(flyer, cr);
+    setTimeout(() => viewer.classList.add("ready"), 450);
+  }));
+}
+function closeBook(){
+  if(!viewerOpen) return;
+  viewer.classList.remove("ready");
+  // 표지가 원래 카드 자리로 돌아감
+  const card = cards[openIdx];
+  if(card){ fromRect = card.querySelector(".face").getBoundingClientRect(); place(flyer, fromRect); }
+  setTimeout(() => {
+    viewer.classList.remove("open"); viewerOpen = false;
+    flyer.style.opacity = 0;
+    if(card) card.style.visibility = "";
+  }, 600);
+}
+$("closeBtn").onclick = closeBook;
+viewer.addEventListener("click", e => { if(e.target === viewer) closeBook(); });
+
+buildTabs(); build(); render();
+</script>
+</body>
+</html>
